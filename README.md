@@ -11,234 +11,267 @@ AI_random_forest/
 ├── data/                           # Archivos CSV originales (time & sales)
 ├── data_ticks_per_second/          # CSV procesados con TPS calculado
 ├── utils/
-│   └── clean_data_csv_to_ticks_per_second.py  # Procesamiento de datos
-├── train_initiation_model.py      # Entrenamiento del modelo
-├── visualize_ai_signals.py         # Visualización de señales detectadas
-├── forward_test_virgin_data.py     # Test con datos nuevos
+│   └── clean_data_csv_to_ticks_per_second.py  # Procesamiento automático
+├── train_initiation_model.py      # ⭐ SCRIPT 1: Entrenar modelo
+├── forward_test_virgin_data.py     # ⭐ SCRIPT 2: Probar cualquier día
+├── visualize_ai_signals.py         # 📦 Módulo interno (no ejecutar)
 ├── initiation_model.pkl            # Modelo entrenado (Random Forest)
-└── outputs/                        # Gráficos y CSVs de resultados
+└── outputs/                        # Gráficos HTML y CSVs de señales
 ```
 
 ---
 
-## 🔄 Pipeline de Datos
+## 🎯 ¿Qué Script Usar y Cuándo?
 
-### 1. Preprocesamiento de Datos
+### ⭐ **SOLO NECESITAS 2 SCRIPTS:**
 
-**Script:** `utils/clean_data_csv_to_ticks_per_second.py`
+| Script | Cuándo Usarlo | Qué Hace |
+|--------|---------------|----------|
+| **`train_initiation_model.py`** | **Una sola vez** (o cuando quieras re-entrenar) | Crea el archivo `initiation_model.pkl` con el cerebro del modelo |
+| **`forward_test_virgin_data.py`** | **Siempre** que quieras probar un día nuevo | Procesa datos + genera gráfico HTML + CSV de señales |
 
-Convierte archivos raw CSV (time & sales) a datos agregados por segundo con Factor TPS calculado:
+### 📦 **NO EJECUTAR DIRECTAMENTE:**
 
-```bash
-python utils/clean_data_csv_to_ticks_per_second.py
-```
-
-**Input:** `data/time_and_sales_nq_*.csv`  
-**Output:** `data_ticks_per_second/tps_time_and_sales_nq_*.csv`
-
-**Columnas generadas:**
-- `Timestamp` - Marca temporal
-- `Precio` - Último precio del segundo
-- `Volumen` - Volumen agregado
-- `Lado` - BID/ASK
-- `Bid/Ask` - Spread
-- `window_vol` - Volumen en ventana
-- `tps_window` - TPS en ventana
-- `factor_tps` - **Factor TPS = window_vol × tps_window** (métrica clave)
+- **`visualize_ai_signals.py`**: Es un módulo/librería que usa `forward_test_virgin_data.py` internamente
+- **`utils/clean_data_csv_to_ticks_per_second.py`**: Se ejecuta automáticamente desde `forward_test_virgin_data.py`
 
 ---
 
-### 2. Entrenamiento del Modelo
+## 🚀 Flujo de Trabajo Completo
 
-**Script:** `train_initiation_model.py`
-
-Entrena un modelo Random Forest para detectar señales de "iniciación" basadas en:
-- Alto Factor TPS (aceleración de volumen)
-- Movimiento de precio significativo posterior
+### 1️⃣ **ENTRENAR EL MODELO** (Solo una vez)
 
 ```bash
 python train_initiation_model.py
 ```
 
-**Features generadas:**
-- Lags de Factor TPS (1-5 periodos)
-- Media y desviación estándar (ventana de 5)
-- Velocidad de precio
+**¿Qué hace?**
+- Lee datos históricos de `data_ticks_per_second/tps_time_and_sales_nq_20251103.csv`
+- Crea features (lags, medias, velocidad de precio)
+- Etiqueta señales de "iniciación" usando heurísticas
+- Entrena Random Forest (100 árboles)
+- **Guarda:** `initiation_model.pkl` ← El cerebro del modelo
 
-**Etiquetado heurístico:**
-- `tps_threshold = 4000` (umbral alto de TPS)
-- `price_move_threshold = 3.5` (ticks de movimiento)
-- `future_window = 10` (segundos hacia adelante)
-
-**Output:** `initiation_model.pkl` (modelo entrenado)
-
----
-
-### 3. Visualización de Señales
-
-**Script:** `visualize_ai_signals.py`
-
-Genera gráficos interactivos HTML con Plotly mostrando:
-- Línea de precio (gris)
-- Señales de compra (verde) - movimiento alcista
-- Señales de venta (rojo) - movimiento bajista
-
-```bash
-python visualize_ai_signals.py
+**Output:**
+```
+✅ initiation_model.pkl creado
+📊 Métricas de evaluación mostradas en consola
 ```
 
-**Requiere:** `initiation_model.pkl` (modelo pre-entrenado)  
-**Output:** `outputs/ai_signals_chart.html` + CSV con señales
-
-**Características del gráfico:**
-- Interactivo (zoom, pan)
-- Sin hover info (limpio)
-- Sin grid vertical
-- Colores diferenciados por dirección
-
 ---
 
-### 4. Forward Test (Datos Nuevos)
+### 2️⃣ **PROBAR CUALQUIER DÍA** (Uso diario)
 
-**Script:** `forward_test_virgin_data.py`
+**Edita la línea 6 de `forward_test_virgin_data.py`:**
 
-Prueba el modelo con datos completamente nuevos (no vistos durante entrenamiento):
+```python
+CSV_FILE = "time_and_sales_nq_20251104"  # ← Cambia la fecha aquí
+```
+
+**Ejecuta:**
 
 ```bash
 python forward_test_virgin_data.py
 ```
 
-**Input:** CSV raw desde `data/`  
-**Process:** Calcula TPS on-the-fly, aplica modelo  
-**Output:** `outputs/ai_signals_chart_virgin.html`
+**¿Qué hace automáticamente?**
+1. ✅ Busca el archivo procesado en `data_ticks_per_second/`
+2. ❌ Si NO existe → Lo procesa desde `data/` usando el algoritmo correcto
+3. 🧠 Carga el modelo `initiation_model.pkl`
+4. 🎨 Genera señales y crea gráfico interactivo
+5. 💾 Guarda en `outputs/`:
+   - `ai_signals_YYYYMMDD.html` (gráfico interactivo)
+   - `ai_signals_YYYYMMDD.csv` (señales detectadas)
 
----
-
-## 🚀 Uso Rápido
-
-### Primera vez (Setup completo)
-
-```bash
-# 1. Procesar datos raw
-python utils/clean_data_csv_to_ticks_per_second.py
-
-# 2. Entrenar modelo
-python train_initiation_model.py
-
-# 3. Visualizar señales
-python visualize_ai_signals.py
+**Output:**
 ```
-
-### Uso regular (modelo ya entrenado)
-
-```bash
-# Solo visualizar señales con modelo existente
-python visualize_ai_signals.py
-
-# O test con datos nuevos
-python forward_test_virgin_data.py
+✅ Found processed TPS file: data_ticks_per_second/tps_time_and_sales_nq_20251104.csv
+🎨 Running AI Model Visualization...
+📊 Chart saved to: outputs/ai_signals_20251104.html
+📄 Signals saved to: outputs/ai_signals_20251104.csv
 ```
 
 ---
 
-## ⚙️ Configuración
+## 📊 Entendiendo el Modelo
 
-### Ajustar Sensibilidad del Modelo
+### ¿Qué es Factor TPS?
 
-Edita `train_initiation_model.py`, función `define_labels()`:
+**Factor TPS = `volumen_ventana × ticks_por_segundo`**
+
+- Detecta **aceleraciones de volumen** (no solo volumen alto)
+- Valores altos (>4000) indican potencial inicio de movimiento fuerte
+- Se calcula automáticamente en el procesamiento
+
+### ¿Cómo se Etiquetan las Señales?
+
+El modelo aprende de señales definidas por **heurísticas** (no hay labels reales):
+
+```python
+# En train_initiation_model.py, función define_labels()
+tps_threshold = 4000         # Factor TPS alto
+price_move_threshold = 3.5   # Movimiento mínimo de precio (ticks)
+future_window = 10           # Segundos hacia adelante
+```
+
+**Una señal de "iniciación" es:**
+- ✅ Factor TPS > 4000 (aceleración)
+- ✅ Precio se mueve ≥3.5 ticks en los próximos 10 segundos
+
+---
+
+## ⚙️ Configuración Avanzada
+
+### Cambiar Sensibilidad del Modelo
+
+**Edita `train_initiation_model.py`, línea 87:**
 
 ```python
 def define_labels(df, 
     tps_threshold=4000,        # ↑ Más selectivo | ↓ Más señales
-    price_move_threshold=3.5,  # ↑ Movimientos grandes | ↓ Más señales
-    future_window=10):         # Segundos hacia adelante
+    price_move_threshold=3.5,  # ↑ Solo movimientos grandes | ↓ Más señales
+    future_window=10):         # Ventana de tiempo (segundos)
 ```
 
-**Después de cambiar, re-entrenar:**
+**Después de cambiar, RE-ENTRENAR:**
 ```bash
 python train_initiation_model.py
 ```
 
+### Cambiar Archivo de Entrenamiento
+
+**Edita `train_initiation_model.py`, línea 166:**
+
+```python
+CSV_PATH = r"d:\PYTHON\ALGOS\AI_random_forest\data_ticks_per_second\tps_time_and_sales_nq_20251103.csv"
+```
+
 ---
 
-## 📊 Formato de Datos
+## 📈 Formato de Datos
 
-### CSV de Entrada (Raw)
+### CSV Raw (Input en `data/`)
 ```csv
 Timestamp;Precio;Volumen;Lado;Bid;Ask
 2025-11-03 06:00:05.920;26085,0;1;ASK;26084,75;26085,25
 ```
 
-### CSV Procesado (TPS)
+### CSV Procesado (Output en `data_ticks_per_second/`)
 ```csv
-Timestamp; Precio; Volumen; factor_tps
-2025-11-03 06:00:05.920; 26085,0; 1; 2,08
+Timestamp;Precio;Volumen;Lado;Bid;Ask;window_vol;tps_window;factor_tps
+2025-11-03 06:00:05.920;26085,0;1;ASK;26084,75;26085,25;150;13,5;2025,0
 ```
 
 **Nota:** Separador `;` y decimal `,` (formato europeo)
 
 ---
 
-## 📈 Resultados del Modelo
+## 🎨 Visualización de Señales
 
-**Última ejecución:**
-- **Datos procesados:** 405,719 samples
-- **Señales detectadas:** 672 (~0.17%)
-- **Factor TPS rango:** 0 - 6,250
-- **Modelo:** Random Forest (100 estimators, balanced)
+El gráfico HTML generado muestra:
+
+- **Línea gris:** Precio del activo
+- **Puntos verdes:** Señales de compra (movimiento alcista detectado)
+- **Puntos rojos:** Señales de venta (movimiento bajista detectado)
+
+**Características:**
+- ✅ Interactivo (zoom, pan)
+- ✅ Sin hover info (limpio)
+- ✅ Sin grid vertical
+- ✅ Abre directamente en navegador
 
 ---
 
-## 🛠️ Dependencias
+## 🛠️ Instalación
 
-```python
-pandas
-numpy
-scikit-learn
-joblib
-matplotlib
-plotly
-```
+### Dependencias
 
-Instalar:
 ```bash
 pip install pandas numpy scikit-learn joblib matplotlib plotly
 ```
 
----
+### Estructura de Carpetas Requerida
 
-## 📝 Notas Importantes
-
-1. **Factor TPS:** Métrica propietaria = `volumen × ticks_por_segundo`
-   - Detecta aceleraciones de volumen
-   - Valores altos (>4000) indican potenciales iniciaciones
-
-2. **Etiquetado Heurístico:** El modelo aprende de señales definidas manualmente
-   - No es supervisado puro (no hay labels reales)
-   - Ajusta umbrales según mercado/instrumento
-
-3. **Archivos Grandes:** Los CSV pueden ser muy pesados
-   - `data_ticks_per_second/` contiene datos agregados (más ligeros)
-   - `data/` contiene raw tick-by-tick (pesados)
+```
+AI_random_forest/
+├── data/                    # Coloca aquí tus CSVs raw
+├── data_ticks_per_second/   # Se crea automáticamente
+└── outputs/                 # Se crea automáticamente
+```
 
 ---
 
 ## 🔍 Troubleshooting
 
-### "No initiation signals found"
-- Reducir `tps_threshold` o `price_move_threshold`
-- Verificar que el CSV tenga suficientes datos
+### ❌ "No initiation signals found"
 
-### "Error loading data"
-- Verificar formato del CSV (`;` separador, `,` decimal)
+**Solución:**
+- Reducir `tps_threshold` (ej: 3000 en vez de 4000)
+- Reducir `price_move_threshold` (ej: 2.5 en vez de 3.5)
+- Verificar que el CSV tenga suficientes datos (>100,000 filas)
+
+### ❌ "Error loading data"
+
+**Solución:**
+- Verificar formato del CSV: separador `;` y decimal `,`
 - Comprobar nombres de columnas (español con espacios)
+- Verificar que el archivo existe en `data/`
 
-### "Model not found"
-- Ejecutar primero `python train_initiation_model.py`
-- Verificar que `initiation_model.pkl` exista
+### ❌ "Model not found"
+
+**Solución:**
+```bash
+python train_initiation_model.py  # Crear el modelo primero
+```
+
+### ❌ "Raw CSV file not found"
+
+**Solución:**
+- Verificar que el archivo existe en `data/time_and_sales_nq_YYYYMMDD.csv`
+- Verificar que `CSV_FILE` en `forward_test_virgin_data.py` tiene el nombre correcto (sin extensión .csv)
 
 ---
 
-## 📧 Contacto
+## 📊 Resultados Típicos
 
-Para ajustes del modelo o dudas sobre la implementación, revisar los comentarios en cada script.
+**Última ejecución (20251103):**
+- **Datos procesados:** 405,719 samples (1 por segundo)
+- **Señales detectadas:** 672 (~0.17% de los datos)
+- **Factor TPS rango:** 0 - 6,250
+- **Modelo:** Random Forest (100 estimators, class_weight='balanced')
+- **Precisión:** ~75% en test set
+
+---
+
+## 💡 Conceptos Clave
+
+### ¿Por qué Random Forest?
+
+- ✅ Maneja bien features no lineales (lags, medias)
+- ✅ Robusto a outliers
+- ✅ No requiere normalización
+- ✅ Proporciona importancia de features
+
+### ¿Por qué Etiquetado Heurístico?
+
+- No hay "ground truth" real de señales de iniciación
+- Las heurísticas capturan conocimiento de trading
+- El modelo aprende **patrones** que preceden a estas condiciones
+
+### ¿Qué es "Virgin Data"?
+
+Datos **completamente nuevos** que el modelo nunca vio durante entrenamiento:
+- Fechas diferentes
+- Condiciones de mercado diferentes
+- Prueba real de generalización del modelo
+
+---
+
+## 📧 Soporte
+
+Para dudas sobre la implementación, revisar los comentarios en cada script.
+
+**Archivos clave:**
+- `train_initiation_model.py` - Lógica de entrenamiento
+- `forward_test_virgin_data.py` - Lógica de testing
+- `utils/clean_data_csv_to_ticks_per_second.py` - Cálculo de Factor TPS
